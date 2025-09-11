@@ -71,14 +71,21 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import axios from 'axios';
 
 const router = useRouter();
 
+// 模拟已登录用户的 ID，在实际项目中，这应从认证状态管理中获取
+const userId = ref(1);
+
+const isLoading = ref(true);
+const error = ref(null);
+
 const isDarkMode = ref(false);
-const selectedBackground = ref(''); // 默认无背景
-const selectedAvatarBorder = ref(''); // 默认无边框
+const selectedBackground = ref('');
+const selectedAvatarBorder = ref('');
 
 const backgrounds = ref([
   'https://picsum.photos/id/10/1600/900', // 示例背景1
@@ -93,24 +100,73 @@ const avatarBorders = ref([
   { name: '星空边框', class: 'stars-border' },
 ]);
 
-const toggleDarkMode = () => {
-  isDarkMode.value = !isDarkMode.value;
+const API_BASE_URL = 'http://localhost:8080/api';
+
+/**
+ * 异步获取用户个性化设置
+ */
+const fetchSettings = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/users/${userId.value}/customization`);
+    const data = response.data;
+    isDarkMode.value = data.isDarkMode;
+    selectedBackground.value = data.selectedBackground;
+    selectedAvatarBorder.value = data.selectedAvatarBorder;
+  } catch (err) {
+    console.error('获取个性化设置失败:', err);
+    error.value = '无法加载设置，请稍后再试。';
+  } finally {
+    isLoading.value = false;
+  }
 };
 
-const saveSettings = () => {
-  console.log('保存设置:', {
-    isDarkMode: isDarkMode.value,
-    selectedBackground: selectedBackground.value,
-    selectedAvatarBorder: selectedAvatarBorder.value,
-  });
-  alert('设置已保存！ (实际功能需后端支持)');
-  // 在实际应用中，这里会将设置发送到后端保存
+/**
+ * 异步保存用户个性化设置
+ */
+const saveSettings = async (settings) => {
+  try {
+    await axios.post(`${API_BASE_URL}/users/${userId.value}/customization`, settings);
+    console.log('个性化设置已成功保存！');
+    // TODO: 替换为更友好的UI提示，例如一个toast或弹窗
+  } catch (err) {
+    console.error('保存设置失败:', err);
+    error.value = '设置保存失败。';
+  }
 };
 
+/**
+ * 监听暗黑模式变化并自动保存
+ */
+watch(isDarkMode, (newValue) => {
+  saveSettings({ isDarkMode: newValue });
+});
+
+/**
+ * 监听背景选择变化并自动保存
+ */
+watch(selectedBackground, (newValue) => {
+  saveSettings({ selectedBackground: newValue });
+});
+
+/**
+ * 监听头像边框变化并自动保存
+ */
+watch(selectedAvatarBorder, (newValue) => {
+  saveSettings({ selectedAvatarBorder: newValue });
+});
+
+/**
+ * 返回上一页
+ */
 const goBack = () => {
   router.go(-1);
 };
+
+onMounted(() => {
+  fetchSettings();
+});
 </script>
+
 
 <style scoped>
 /* 基本样式和主题切换 */

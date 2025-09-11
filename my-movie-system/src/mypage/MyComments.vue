@@ -32,50 +32,63 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import axios from 'axios';
 
 const router = useRouter();
 
-// 模拟用户的评论数据
-// 实际应用中，这里会从后端获取
-const myComments = ref([
-  {
-    commentId: 'c1',
-    movieId: '1',
-    movieTitle: '速度与激情10',
-    content: '紧张刺激，视觉效果很棒，但剧情有点老套了。',
-    time: '2023-05-20'
-  },
-  {
-    commentId: 'c2',
-    movieId: '2',
-    movieTitle: '流浪地球2',
-    content: '硬核科幻，特效堪比好莱坞大片，感觉比第一部更震撼！',
-    time: '2023-01-25'
-  },
-  {
-    commentId: 'c3',
-    movieId: '3',
-    movieTitle: '沙丘',
-    content: '画面非常唯美，配乐更是史诗级，可惜剧情节奏有点慢。',
-    time: '2021-10-30'
-  }
-]);
+// 模拟已登录用户的 ID，在实际项目中，这应从认证状态管理中获取
+const userId = ref(1);
 
+// 评论数据
+const myComments = ref([]);
+const isLoading = ref(true);
+const error = ref(null);
+
+const API_BASE_URL = 'http://localhost:8080/api';
+
+/**
+ * 异步获取用户评论数据
+ */
+const fetchComments = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/users/${userId.value}/comments`);
+    // 假设后端返回的数据格式与前端所需一致
+    myComments.value = response.data;
+  } catch (err) {
+    console.error('获取评论数据失败:', err);
+    error.value = '无法获取评论数据，请稍后再试。';
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+/**
+ * 导航到影片详情页并定位到评论
+ */
 const goToCommentLocation = (comment) => {
   // 跳转到影片详情页，并通过 hash 定位到评论位置
   router.push({
     name: 'MovieDetailPage',
     params: { id: comment.movieId },
-    hash: `#comment-${comment.commentId}`
+    hash: `#comment-${comment.commentId}`,
   });
 };
 
+/**
+ * 返回上一页
+ */
 const goBack = () => {
   router.go(-1);
 };
+
+// 在组件挂载时加载数据
+onMounted(() => {
+  fetchComments();
+});
 </script>
+
 
 <style scoped>
 /* 整个页面的外层容器 */

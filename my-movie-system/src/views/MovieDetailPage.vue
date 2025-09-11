@@ -227,10 +227,10 @@
 </template>
 
 <script setup>
-import { ref, defineProps, watch, onMounted, nextTick } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { ref, watch, nextTick } from 'vue';
+import { useRouter } from 'vue-router';
+import axios from 'axios';
 
-const route = useRoute();
 const router = useRouter();
 
 const props = defineProps({
@@ -240,224 +240,169 @@ const props = defineProps({
   }
 });
 
-const currentUserId = ref('user-A');
+const currentUserId = ref('user-A'); // 模拟已登录用户的ID，实际项目中应从认证状态中获取
+const isLoading = ref(true);
+const error = ref(null);
+
+// 动态数据，从后端加载
 const movieData = ref({});
 const likes = ref(0);
 const favorites = ref(0);
 const shares = ref(0);
+const relatedMovies = ref([]);
+
+// 评论相关
+const comments = ref([]);
 const newCommentText = ref('');
 const newReplyText = ref('');
-const comments = ref([]);
 const replyingToId = ref(null);
 
-// 新增：举报弹窗相关状态
+// 举报弹窗相关状态
 const isReportModalVisible = ref(false);
 const commentToReportId = ref(null);
 const reportReason = ref('');
 const reportMessage = ref('');
 const contactInfo = ref('');
 
-// 模拟的电影数据列表，现在支持无限层级回复
-const mockMovieDatabase = {
-  '21': {
-    name: '速度与激情10', rating: 9.0, poster: 'https://cdn.pixabay.com/photo/2023/07/28/18/59/ai-generated-8155998_1280.png',
-    director: '路易斯·莱特里尔', actors: '范·迪塞尔, 杰森·莫玛', genres: '动作, 犯罪', duration: '141分钟', releaseYear: 2023,
-    synopsis: '在无数任务和不可能的几率下，多米尼克·托雷托和他的家人，用巧妙、勇气和技巧战胜了每一个敌人。如今，他们必须面对来自过往的威胁，一个在十年前被他们击败的敌人，而现在正以复仇的姿态出现。',
-    comments: [
-      { 
-        id: 'c1', userId: 'user-B', text: '这部电影太棒了，值得二刷！', likes: 12, replies: [] 
-      },
-      { 
-        id: 'c2', 
-        userId: 'user-C', 
-        text: '剧情有点拖沓，但特效很赞。', 
-        likes: 5, 
-        replies: [
-          { id: 'r1', userId: 'user-A', text: '我觉得剧情还行，可能是需要更长的铺垫。', likes: 2, replies: [] },
-          { 
-            id: 'r2', 
-            userId: 'user-D', 
-            text: '同感，特效确实是亮点。', 
-            likes: 1, 
-            replies: [
-              { id: 'r5', userId: 'user-E', text: '回复 @user-D: 特效确实是一流的！', likes: 1, replies: [] }
-            ] 
-          }
-        ] 
-      },
-      { 
-        id: 'c3', 
-        userId: 'user-A', 
-        text: '这是我的第一条评论！希望大家喜欢这个新功能。', 
-        likes: 20, 
-        replies: [
-          { 
-            id: 'r3', 
-            userId: 'user-E', 
-            text: '这个评论功能真的很好用！', 
-            likes: 3, 
-            replies: [
-              { id: 'r4', userId: 'user-A', text: '哈哈，谢谢你的夸奖！', likes: 5, replies: [] }
-            ]
-          }
-        ] 
-      },
-    ]
-  },
-  '23': {
-    name: '流浪地球2', rating: 9.3, poster: 'https://cdn.pixabay.com/photo/2023/09/21/04/45/ai-generated-8265779_1280.png',
-    director: '郭帆', actors: '吴京, 刘德华', genres: '科幻, 冒险', duration: '173分钟', releaseYear: 2023,
-    synopsis: '太阳即将毁灭，人类在地球表面建造出巨大的推进器，寻找新的家园。然而宇宙之路危机四伏，为了拯救地球，流浪地球时代的年轻人再次挺身而出。',
-    comments: [
-      { id: 'c4', userId: 'user-B', text: '硬核科幻，特效堪比好莱坞大片，感觉比第一部更震撼！', likes: 5, replies: [] },
-      { id: 'c5', userId: 'user-E', text: '给中国科幻电影点赞！', likes: 15, replies: [] }
-    ]
-  },
-  '11': {
-    name: '肖申克的救赎', rating: 9.7, poster: 'https://cdn.pixabay.com/photo/2016/11/29/03/40/movie-1867140_1280.jpg',
-    director: '弗兰克·德拉邦特', actors: '蒂姆·罗宾斯, 摩根·弗里曼', genres: '剧情, 犯罪', duration: '142分钟', releaseYear: 1994,
-    synopsis: '一名年轻的银行家被冤枉谋杀，被判终身监禁。在充满暴力与腐败的肖申克监狱中，他没有放弃对希望的追求，最终凭借智慧和毅力成功逃脱。',
-    comments: [
-      { id: 'c6', userId: 'user-A', text: '非常感人的一部电影，经典永流传。', likes: 25, replies: [] },
-      { id: 'c7', userId: 'user-F', text: '希望是美好的，也许是人间至善。', likes: 18, replies: [] }
-    ]
+// 后端 API 地址
+const API_BASE_URL = 'http://localhost:8080/api';
+
+/**
+ * 异步加载所有电影数据
+ */
+const fetchMovieData = async (movieId) => {
+  isLoading.value = true;
+  error.value = null;
+  try {
+    // 获取电影详情
+    const movieRes = await axios.get(`${API_BASE_URL}/movies/${movieId}`);
+    const movieDetails = movieRes.data.data;
+    movieData.value = movieDetails;
+    likes.value = movieDetails.likes || 0;
+    favorites.value = movieDetails.favorites || 0;
+    shares.value = movieDetails.shares || 0;
+
+    // 获取相关电影
+    const relatedRes = await axios.get(`${API_BASE_URL}/movies/${movieId}/related`);
+    relatedMovies.value = relatedRes.data.data || [];
+
+    // 获取评论列表
+    const commentsRes = await axios.get(`${API_BASE_URL}/movies/${movieId}/comments`);
+    comments.value = commentsRes.data.data || [];
+
+  } catch (err) {
+    console.error('加载电影数据失败:', err);
+    error.value = '无法加载电影详情，请稍后再试。';
+  } finally {
+    isLoading.value = false;
   }
 };
-const relatedMovies = ref([
-  { id: '201', name: '英雄', rating: 8.8, poster: 'https://cdn.pixabay.com/photo/2023/10/05/18/43/ai-generated-8296316_1280.png' },
-  { id: '202', name: '卧虎藏龙', rating: 9.1, poster: 'https://cdn.pixabay.com/photo/2023/07/26/18/06/ai-generated-8152331_1280.png' },
-  { id: '203', name: '十面埋伏', rating: 8.2, poster: 'https://cdn.pixabay.com/photo/2023/08/29/14/06/ai-generated-8221192_1280.png' },
-]);
 
-const fetchMovieData = (movieId) => {
-  const data = mockMovieDatabase[movieId] || {};
-  movieData.value = data;
-  likes.value = Math.floor(Math.random() * 200) + 50;
-  favorites.value = Math.floor(Math.random() * 100) + 20;
-  shares.value = Math.floor(Math.random() * 80) + 10;
-  // 克隆评论数据以防止意外修改原始模拟数据
-  comments.value = JSON.parse(JSON.stringify(data.comments || []));
+/**
+ * 点赞电影
+ */
+const handleLike = async () => {
+  try {
+    // 调用点赞 API，后端会处理点赞和取消点赞的逻辑
+    await axios.post(`${API_BASE_URL}/movies/${props.id}/like`, { userId: currentUserId.value });
+    // 重新获取电影数据以更新点赞数
+    await fetchMovieData(props.id);
+  } catch (err) {
+    console.error('点赞失败:', err);
+  }
 };
 
-watch(() => props.id, (newId) => {
-  fetchMovieData(newId);
-}, { immediate: true });
+/**
+ * 收藏电影
+ */
+const handleFavorite = async () => {
+  try {
+    await axios.post(`${API_BASE_URL}/movies/${props.id}/favorite`, { userId: currentUserId.value });
+    await fetchMovieData(props.id);
+  } catch (err) {
+    console.error('收藏失败:', err);
+  }
+};
 
-const handleLike = () => { likes.value++; };
-const handleFavorite = () => { favorites.value++; };
-const handleShare = () => { shares.value++; };
+/**
+ * 分享电影
+ */
+const handleShare = async () => {
+  try {
+    await axios.post(`${API_BASE_URL}/movies/${props.id}/share`, { userId: currentUserId.value });
+    await fetchMovieData(props.id);
+  } catch (err) {
+    console.error('分享失败:', err);
+  }
+};
 
-const handleComment = () => {
+/**
+ * 发表评论
+ */
+const handleComment = async () => {
   if (newCommentText.value.trim() !== '') {
-    const newCommentId = Date.now().toString();
-    comments.value.unshift({ 
-      id: newCommentId,
-      userId: currentUserId.value,
-      text: newCommentText.value,
-      likes: 0,
-      replies: []
-    });
-    newCommentText.value = '';
-    
-    nextTick(() => {
-      const element = document.getElementById(`comment-${newCommentId}`);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        element.style.outline = '3px solid #e50914';
-        element.style.borderRadius = '8px';
-        element.style.boxShadow = '0 0 15px rgba(229, 9, 20, 0.5)';
-        setTimeout(() => {
-          element.style.outline = 'none';
-          element.style.boxShadow = 'none';
-        }, 3000);
-      }
-    });
+    try {
+      await axios.post(`${API_BASE_URL}/comments`, {
+        movieId: props.id,
+        userId: currentUserId.value,
+        content: newCommentText.value
+      });
+      newCommentText.value = '';
+      await fetchMovieData(props.id); // 刷新评论列表
+    } catch (err) {
+      console.error('发表评论失败:', err);
+    }
   }
 };
 
-// 递归查找并增加点赞数
-const handleCommentLike = (commentId) => {
-    const findAndLike = (items) => {
-        for (const item of items) {
-            if (item.id === commentId) {
-                item.likes++;
-                return true;
-            }
-            if (item.replies && findAndLike(item.replies)) {
-                return true;
-            }
-        }
-        return false;
-    };
-    findAndLike(comments.value);
+/**
+ * 递归添加新评论或回复
+ */
+const handleReply = async (targetId) => {
+  if (newReplyText.value.trim() !== '') {
+    try {
+      await axios.post(`${API_BASE_URL}/comments`, {
+        movieId: props.id,
+        userId: currentUserId.value,
+        content: newReplyText.value,
+        parentId: targetId
+      });
+      newReplyText.value = '';
+      replyingToId.value = null;
+      await fetchMovieData(props.id); // 刷新评论列表
+    } catch (err) {
+      console.error('发表回复失败:', err);
+    }
+  }
+};
+
+/**
+ * 评论点赞
+ */
+const handleCommentLike = async (commentId) => {
+  try {
+    await axios.post(`${API_BASE_URL}/comments/${commentId}/like`, { userId: currentUserId.value });
+    await fetchMovieData(props.id); // 刷新评论列表
+  } catch (err) {
+    console.error('评论点赞失败:', err);
+  }
+};
+
+/**
+ * 删除评论
+ */
+const handleDeleteComment = async (commentIdToDelete) => {
+  try {
+    await axios.delete(`${API_BASE_URL}/comments/${commentIdToDelete}`);
+    await fetchMovieData(props.id); // 刷新评论列表
+  } catch (err) {
+    console.error('删除评论失败:', err);
+  }
 };
 
 const toggleReplyInput = (commentId) => {
-    replyingToId.value = replyingToId.value === commentId ? null : commentId;
-    newReplyText.value = '';
-};
-
-// 递归添加新评论或回复，支持无限层级
-const handleReply = (targetId, parentId = null) => {
-    if (newReplyText.value.trim() !== '') {
-        const newReply = {
-            id: Date.now().toString() + 'r',
-            userId: currentUserId.value,
-            text: newReplyText.value,
-            likes: 0,
-            replies: [],
-        };
-        
-        // 递归查找目标评论/回复并添加新的回复
-        const findAndAdd = (items, idToAddReplyTo) => {
-            for (const item of items) {
-                if (item.id === idToAddReplyTo) {
-                    // 如果不是对顶级评论的回复，则加上 @用户 的标记
-                    if (parentId) {
-                      newReply.text = `回复 @${item.userId}: ${newReply.text}`;
-                    }
-                    item.replies.push(newReply);
-                    return true;
-                }
-                if (item.replies && item.replies.length > 0) {
-                    if (findAndAdd(item.replies, idToAddReplyTo)) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        };
-
-        findAndAdd(comments.value, targetId);
-
-        newReplyText.value = '';
-        replyingToId.value = null;
-    }
-};
-
-// 递归查找并删除评论或回复
-const handleDeleteComment = (commentIdToDelete, parentId = null) => {
-    // 如果有父级ID，则从父级的 replies 列表中删除
-    if (parentId) {
-        const findAndDeleteFromReplies = (items, targetParentId, childId) => {
-            for (const item of items) {
-                if (item.id === targetParentId) {
-                    item.replies = item.replies.filter(r => r.id !== childId);
-                    return true;
-                }
-                if (item.replies && item.replies.length > 0) {
-                    if (findAndDeleteFromReplies(item.replies, targetParentId, childId)) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        };
-        findAndDeleteFromReplies(comments.value, parentId, commentIdToDelete);
-    } else {
-        // 如果没有父级ID，则从顶级评论列表中删除
-        comments.value = comments.value.filter(c => c.id !== commentIdToDelete);
-    }
+  replyingToId.value = replyingToId.value === commentId ? null : commentId;
+  newReplyText.value = '';
 };
 
 const handleCommentReport = (commentId) => {
@@ -473,16 +418,20 @@ const closeModal = () => {
   contactInfo.value = '';
 };
 
-const submitReport = () => {
-  console.log('提交举报信息：', {
-    reportedCommentId: commentToReportId.value,
-    reason: reportReason.value,
-    message: reportMessage.value,
-    contact: contactInfo.value,
-  });
-  // 这里我们使用一个临时的自定义弹窗来替代 `alert`
-  showCustomModal('举报已提交，感谢您的反馈！');
-  closeModal();
+const submitReport = async () => {
+  try {
+    await axios.post(`${API_BASE_URL}/comments/${commentToReportId.value}/report`, {
+      userId: currentUserId.value,
+      reason: reportReason.value,
+      message: reportMessage.value,
+      contact: contactInfo.value,
+    });
+    showCustomModal('举报已提交，感谢您的反馈！');
+    closeModal();
+  } catch (err) {
+    console.error('提交举报失败:', err);
+    showCustomModal('提交举报失败，请重试。');
+  }
 };
 
 const showCustomModal = (message) => {
@@ -499,25 +448,16 @@ const showCustomModal = (message) => {
   document.body.appendChild(modalDiv);
 };
 
-const goToMovie = (movieId) => { router.push({ name: 'MovieDetail', params: { id: movieId } }); };
+const goToMovie = (movieId) => {
+  router.push({ name: 'MovieDetail', params: { id: movieId } });
+};
 
-onMounted(() => {
-  if (route.hash) {
-    nextTick(() => {
-      const element = document.getElementById(route.hash.substring(1));
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        element.style.outline = '3px solid #e50914';
-        element.style.borderRadius = '8px';
-        element.style.boxShadow = '0 0 15px rgba(229, 9, 20, 0.5)';
-        setTimeout(() => {
-          element.style.outline = 'none';
-          element.style.boxShadow = 'none';
-        }, 3000);
-      }
-    });
+// 使用 watch 监听路由参数变化，并重新加载数据
+watch(() => props.id, (newId) => {
+  if (newId) {
+    fetchMovieData(newId);
   }
-});
+}, { immediate: true });
 </script>
 
 <style scoped>

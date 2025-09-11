@@ -56,52 +56,63 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
-import { useRouter } from 'vue-router'; // 引入 useRouter
+import { ref, onMounted, watch } from 'vue';
+import { useRouter } from 'vue-router';
+import axios from 'axios';
 
-const router = useRouter(); // 获取 router 实例
+const router = useRouter();
 
-// 移除 defineEmits(['movie-clicked']);
+// 核心数据
+const moviesData = ref([]); // 存储从后端加载的电影列表
+const availableGenres = ref([]); // 存储从后端加载的类型列表
+const isLoading = ref(true);
+const error = ref(null);
 
-const moviesData = ref([
-  { id: '1', name: '流浪地球2', poster: 'https://picsum.photos/id/1/200/300', year: 2023, genres: ['科幻', '冒险'] },
-  { id: '2', name: '封神第一部', poster: 'https://picsum.photos/id/2/200/300', year: 2023, genres: ['奇幻', '动作'] },
-  { id: '3', name: '肖申克的救赎', poster: 'https://picsum.photos/id/3/200/300', year: 1994, genres: ['剧情', '犯罪'] },
-  { id: '4', name: '阿凡达', poster: 'https://picsum.photos/id/4/200/300', year: 2009, genres: ['科幻', '冒险'] },
-  { id: '5', name: '霸王别姬', poster: 'https://picsum.photos/id/5/200/300', year: 1993, genres: ['剧情', '爱情'] },
-  { id: '6', name: '泰坦尼克号', poster: 'https://picsum.photos/id/6/200/300', year: 1997, genres: ['爱情', '剧情'] },
-  { id: '7', name: '千与千寻', poster: 'https://picsum.photos/id/7/200/300', year: 2001, genres: ['动画', '奇幻'] },
-  { id: '8', name: '哈利·波特', poster: 'https://picsum.photos/id/8/200/300', year: 2001, genres: ['奇幻', '冒险'] },
-  { id: '9', name: '盗梦空间', poster: 'https://picsum.photos/id/9/200/300', year: 2010, genres: ['科幻', '悬疑'] },
-  { id: '10', name: '星际穿越', poster: 'https://picsum.photos/id/10/200/300', year: 2014, genres: ['科幻', '冒险'] },
-  { id: '11', name: '复仇者联盟4', poster: 'https://picsum.photos/id/11/200/300', year: 2019, genres: ['动作', '科幻'] },
-  { id: '12', name: '绿皮书', poster: 'https://picsum.photos/id/12/200/300', year: 2018, genres: ['剧情', '传记'] },
-  { id: '13', name: '哪吒之魔童降世', poster: 'https://picsum.photos/id/13/200/300', year: 2019, genres: ['动画', '奇幻'] },
-  { id: '14', name: '你的名字', poster: 'https://picsum.photos/id/14/200/300', year: 2016, genres: ['动画', '爱情'] },
-  { id: '15', name: '让子弹飞', poster: 'https://picsum.photos/id/15/200/300', year: 2010, genres: ['剧情', '喜剧'] },
-]);
-
-const availableGenres = ref(['科幻', '动作', '奇幻', '剧情', '冒险', '悬疑', '喜剧', '爱情', '犯罪', '动画', '传记']);
-
+// 筛选条件
 const selectedYear = ref('');
 const selectedGenres = ref([]);
 
-const filteredMovies = computed(() => {
-  let filtered = moviesData.value;
-  if (selectedYear.value) {
-    const startYear = parseInt(selectedYear.value.slice(0, 4));
-    const endYear = startYear + 9;
-    filtered = filtered.filter(movie => movie.year >= startYear && movie.year <= endYear);
-  }
-  if (selectedGenres.value.length > 0) {
-    // 核心改动：使用 .every() 方法确保电影包含所有选中的类型
-    filtered = filtered.filter(movie =>
-      selectedGenres.value.every(genre => movie.genres.includes(genre))
-    );
-  }
-  return filtered;
-});
+// 后端 API 地址
+const API_BASE_URL = 'http://localhost:8080/api';
 
+/**
+ * 异步加载所有电影类型
+ */
+const fetchGenres = async () => {
+  try {
+    const res = await axios.get(`${API_BASE_URL}/genres`);
+    // 假设后端返回的数据格式为 { data: [{ genreName: '科幻' }, ...] }
+    availableGenres.value = res.data.data.map(g => g.genreName) || [];
+  } catch (err) {
+    console.error('加载电影类型失败:', err);
+    // 即使加载失败，也不中断主要流程
+  }
+};
+
+/**
+ * 异步加载符合筛选条件的电影
+ */
+const fetchMovies = async () => {
+  isLoading.value = true;
+  error.value = null;
+  try {
+    const params = {
+      genres: selectedGenres.value.join(','),
+      year: selectedYear.value
+    };
+    const res = await axios.get(`${API_BASE_URL}/movies/filter`, { params });
+    moviesData.value = res.data.data || [];
+  } catch (err) {
+    console.error('加载电影列表失败:', err);
+    error.value = '无法加载电影列表，请稍后再试。';
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+/**
+ * 切换选中类型，并重新加载电影
+ */
 const toggleGenre = (genre) => {
   const index = selectedGenres.value.indexOf(genre);
   if (index === -1) {
@@ -111,10 +122,23 @@ const toggleGenre = (genre) => {
   }
 };
 
+/**
+ * 跳转到电影详情页
+ */
 const goToMovie = (movieId) => {
-  // 使用 router.push() 进行导航
   router.push({ name: 'MovieDetailPage', params: { id: movieId } });
 };
+
+// 监听筛选条件变化，自动重新加载电影
+watch([selectedYear, selectedGenres], () => {
+  fetchMovies();
+});
+
+// 在组件挂载时，先加载所有类型，然后加载初始电影列表
+onMounted(() => {
+  fetchGenres();
+  fetchMovies();
+});
 </script>
 
 <style scoped>

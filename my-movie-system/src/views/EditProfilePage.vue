@@ -53,63 +53,110 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import axios from 'axios';
 
 const router = useRouter();
 
-// 模拟从后端获取的初始数据
-const avatarUrl = ref('https://picsum.photos/id/64/150/150');
-const nickname = ref('你的昵称');
-const birthday = ref('2000-01-01');
+const userId = ref(1); // 模拟已登录用户的ID，实际项目中应从认证状态中获取
+
+// 动态数据，从后端加载
+const avatarUrl = ref('');
+const nickname = ref('');
+const birthday = ref('');
 
 const message = ref('');
 const messageType = ref('');
 
-// 返回上一页
+// 后端 API 地址
+const API_BASE_URL = 'http://localhost:8080/api';
+
+/**
+ * 异步加载用户个人信息
+ */
+const fetchUserProfile = async () => {
+    try {
+        const res = await axios.get(`${API_BASE_URL}/users/${userId.value}/profile`);
+        const profile = res.data.data;
+        if (profile) {
+            avatarUrl.value = profile.avatarUrl || 'https://default-avatar-url.com';
+            nickname.value = profile.nickname || '';
+            birthday.value = profile.birthday || '';
+        }
+    } catch (err) {
+        console.error('加载用户信息失败:', err);
+        showMessage('加载用户信息失败，请重试。', 'error');
+    }
+};
+
+/**
+ * 处理头像上传
+ */
+const handleAvatarChange = async (event) => {
+    const file = event.target.files[0];
+    if (file) {
+        try {
+            const formData = new FormData();
+            formData.append('avatar', file);
+            const res = await axios.post(`${API_BASE_URL}/users/${userId.value}/avatar`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+            avatarUrl.value = res.data.data.avatarUrl; // 假设后端返回新的头像URL
+            showMessage('头像已更新！', 'success');
+        } catch (err) {
+            console.error('上传头像失败:', err);
+            showMessage('上传头像失败，请重试。', 'error');
+        }
+    }
+};
+
+/**
+ * 保存修改后的个人信息
+ */
+const updateProfile = async () => {
+    if (!nickname.value || !birthday.value) {
+        showMessage('请填写所有必填项！', 'error');
+        return;
+    }
+
+    try {
+        await axios.put(`${API_BASE_URL}/users/${userId.value}/profile`, {
+            nickname: nickname.value,
+            birthday: birthday.value
+        });
+        showMessage('个人信息保存成功！', 'success');
+        // 可选：保存成功后跳转回个人主页
+        // router.push({ name: 'ProfilePage', params: { id: userId.value } });
+    } catch (err) {
+        console.error('保存失败:', err);
+        showMessage('保存失败，请重试。', 'error');
+    }
+};
+
+/**
+ * 返回上一页
+ */
 const goBack = () => {
-  router.back();
+    router.back();
 };
 
-// 模拟头像文件处理
-const handleAvatarChange = (event) => {
-  const file = event.target.files[0];
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      avatarUrl.value = e.target.result;
-    };
-    reader.readAsDataURL(file);
-    showMessage('头像已更新！', 'success');
-  }
-};
-
-// 模拟保存修改
-const updateProfile = () => {
-  // 这里可以添加表单验证逻辑
-  if (!nickname.value || !birthday.value) {
-    showMessage('请填写所有必填项！', 'error');
-    return;
-  }
-
-  // 模拟 API 请求
-  setTimeout(() => {
-    // 假设请求成功
-    showMessage('个人信息保存成功！', 'success');
-    console.log('个人信息已保存:', {
-      nickname: nickname.value,
-      birthday: birthday.value,
-    });
-  }, 1000);
-};
-
+/**
+ * 显示提示信息
+ */
 const showMessage = (msg, type) => {
-  message.value = msg;
-  messageType.value = type;
-  setTimeout(() => {
-    message.value = '';
-  }, 3000); // 3秒后自动隐藏
+    message.value = msg;
+    messageType.value = type;
+    setTimeout(() => {
+        message.value = '';
+    }, 3000); // 3秒后自动隐藏
 };
+
+onMounted(() => {
+    fetchUserProfile();
+});
 </script>
 
 <style scoped>

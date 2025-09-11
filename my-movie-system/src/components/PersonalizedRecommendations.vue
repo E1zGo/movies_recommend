@@ -62,69 +62,72 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import axios from 'axios';
 
-const router = useRouter(); 
+const router = useRouter();
 
-const userLikedMovies = ref([
-  { id: 101, name: '星际穿越', rating: 9.4, poster: 'https://cdn.pixabay.com/photo/2023/08/29/14/05/ai-generated-8221191_1280.png', isLiked: true },
-  { id: 102, name: '盗梦空间', rating: 9.3, poster: 'https://cdn.pixabay.com/photo/2023/09/21/04/45/ai-generated-8265779_1280.png', isLiked: true },
-]);
-const allRecommendations = ref(
-  Array.from({ length: 50 }, (_, i) => ({
-    id: i + 1,
-    name: `推荐电影 ${i + 1}`,
-    rating: (9.5 - i * 0.05).toFixed(1),
-    poster: `https://picsum.photos/id/${10 + i}/300/450`,
-  }))
-);
+const recommendedMovies = ref([]);
+const currentPage = ref(0);
+const pageSize = 8;
+const loading = ref(false);
+const error = ref(null);
 
-const itemsPerPage = 10;
-const currentPage = ref(1);
-const totalPages = computed(() => {
-  const totalItems = allRecommendations.value.length + userLikedMovies.value.length;
-  return Math.ceil(totalItems / itemsPerPage);
-});
-const displayedMovies = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage;
-  const end = start + itemsPerPage;
-  if (currentPage.value === 1) {
-    const recommendedSlice = allRecommendations.value.slice(0, itemsPerPage - userLikedMovies.value.length);
-    return [...userLikedMovies.value, ...recommendedSlice];
-  } else {
-    const startIndex = start - userLikedMovies.value.length;
-    const endIndex = end - userLikedMovies.value.length;
-    return allRecommendations.value.slice(startIndex, endIndex);
-  }
-});
+const totalPages = ref(0);
+const paginatedMovies = ref([]);
 
-const prevPage = () => {
-  if (currentPage.value > 1) {
-    currentPage.value--;
-  }
-};
-const nextPage = () => {
-  if (currentPage.value < totalPages.value) {
-    currentPage.value++;
-  }
-};
-const firstPage = () => {
-    currentPage.value = 1;
-};
-const lastPage = () => {
-    currentPage.value = totalPages.value;
-};
+// 模拟的用户ID，实际项目中应从认证状态中获取
+const currentUserId = ref('user-A');
 
 const goToMovie = (movieId) => {
-  router.push({ name: 'MovieDetailPage', params: { id: movieId } });
+  router.push({ name: 'MovieDetail', params: { id: movieId } });
 };
 
-const goToPage = (page) => {
-  if (page >= 1 && page <= totalPages.value) {
-    currentPage.value = page;
+const fetchRecommendations = async () => {
+  loading.value = true;
+  error.value = null;
+  try {
+    const response = await axios.get(`http://localhost:8080/api/recommendations/user/${currentUserId.value}`);
+    recommendedMovies.value = response.data.data;
+    totalPages.value = Math.ceil(recommendedMovies.value.length / pageSize);
+    updatePaginatedMovies();
+  } catch (err) {
+    error.value = '加载推荐电影失败。';
+    console.error('Failed to fetch recommendations:', err);
+  } finally {
+    loading.value = false;
   }
 };
+
+const updatePaginatedMovies = () => {
+  const start = currentPage.value * pageSize;
+  const end = start + pageSize;
+  paginatedMovies.value = recommendedMovies.value.slice(start, end);
+};
+
+const prevPage = () => {
+  if (currentPage.value > 0) {
+    currentPage.value--;
+    updatePaginatedMovies();
+  }
+};
+
+const nextPage = () => {
+  if (currentPage.value < totalPages.value - 1) {
+    currentPage.value++;
+    updatePaginatedMovies();
+  }
+};
+
+onMounted(() => {
+  fetchRecommendations();
+});
+
+watch(recommendedMovies, () => {
+  totalPages.value = Math.ceil(recommendedMovies.value.length / pageSize);
+  updatePaginatedMovies();
+});
 </script>
 
 <style scoped>

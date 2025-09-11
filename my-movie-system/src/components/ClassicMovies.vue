@@ -23,45 +23,46 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import axios from 'axios'
 
-const router = useRouter();
-const carousel = ref(null);
+const router = useRouter()
+const carousel = ref(null)
+const classicMovies = ref([]) // 动态加载
 
-const classicMovies = ref([
-  { id: 11, name: '肖申克的救赎', rating: 9.7, poster: 'https://cdn.pixabay.com/photo/2016/11/29/03/40/movie-1867140_1280.jpg' },
-  { id: 12, name: '霸王别姬', rating: 9.6, poster: 'https://cdn.pixabay.com/photo/2023/11/03/05/59/ai-generated-8361661_1280.jpg' },
-  { id: 13, name: '这个杀手不太冷', rating: 9.4, poster: 'https://cdn.pixabay.com/photo/2023/10/25/11/49/ai-generated-8340150_1280.png' },
-  { id: 14, name: '阿甘正传', rating: 9.5, poster: 'https://cdn.pixabay.com/photo/2023/10/22/07/35/ai-generated-8333333_1280.png' },
-  { id: 15, name: '千与千寻', rating: 9.4, poster: 'https://cdn.pixabay.com/photo/2023/10/20/15/34/ai-generated-8330107_1280.png' },
-  { id: 16, name: '泰坦尼克号', rating: 9.4, poster: 'https://cdn.pixabay.com/photo/2023/07/28/18/59/ai-generated-8155998_1280.png' },
-  { id: 17, name: '辛德勒的名单', rating: 9.6, poster: 'https://cdn.pixabay.com/photo/2023/10/19/08/42/ai-generated-8326265_1280.png' },
-  { id: 18, name: '盗梦空间', rating: 9.3, poster: 'https://cdn.pixabay.com/photo/2023/09/21/04/45/ai-generated-8265779_1280.png' },
-  { id: 19, name: '星际穿越', rating: 9.4, poster: 'https://cdn.pixabay.com/photo/2023/08/29/14/05/ai-generated-8221191_1280.png' },
-  { id: 20, name: '教父', rating: 9.7, poster: 'https://cdn.pixabay.com/photo/2023/07/25/11/56/ai-generated-8149176_1280.png' },
-  { id: 21, name: '指环王：护戒使者', rating: 9.1, poster: 'https://cdn.pixabay.com/photo/2023/07/28/18/59/ai-generated-8155998_1280.png' },
-  { id: 22, name: '低俗小说', rating: 8.9, poster: 'https://cdn.pixabay.com/photo/2023/07/25/11/56/ai-generated-8149176_1280.png' },
-  { id: 23, name: '忠犬八公的故事', rating: 9.2, poster: 'https://cdn.pixabay.com/photo/2023/09/21/04/45/ai-generated-8265779_1280.png' },
-  { id: 24, name: '搏击俱乐部', rating: 9.0, poster: 'https://cdn.pixabay.com/photo/2023/08/29/14/05/ai-generated-8221191_1280.png' },
-  { id: 25, name: '飞越疯人院', rating: 9.1, poster: 'https://cdn.pixabay.com/photo/2023/10/25/11/49/ai-generated-8340150_1280.png' },
-]);
-
+// 滚动
 const scroll = (direction) => {
-  const container = carousel.value;
-  if (!container) return;
-  
-  const scrollAmount = 320;
-  if (direction === 'next') {
-    container.scrollLeft += scrollAmount;
-  } else {
-    container.scrollLeft -= scrollAmount;
-  }
-};
+  const container = carousel.value
+  if (!container) return
+  const scrollAmount = 320
+  container.scrollLeft += direction === 'next' ? scrollAmount : -scrollAmount
+}
 
+// 跳转到电影详情页
 const goToMovie = (movieId) => {
-  router.push({ name: 'MovieDetailPage', params: { id: movieId } });
-};
+  router.push({ name: 'MovieDetailPage', params: { id: movieId } })
+}
+
+// 从后端加载数据
+const loadClassicMovies = async () => {
+  try {
+    const res = await axios.get('/api/movies', {
+      params: {
+        type: 'classic',   // 后端可根据 type 或标签来返回经典电影
+        page: 1,
+        size: 15
+      }
+    })
+    classicMovies.value = res.data.data || [] // 假设标准返回 { code, message, data }
+  } catch (err) {
+    console.error('加载经典电影失败', err)
+  }
+}
+
+onMounted(() => {
+  loadClassicMovies()
+})
 </script>
 
 <style scoped>

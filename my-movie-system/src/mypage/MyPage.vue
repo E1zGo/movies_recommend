@@ -179,40 +179,33 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import axios from 'axios';
 
 const router = useRouter();
 
-const username = ref('SakuraBoyfriend');
-const exp = ref(65);
-const activeTab = ref('history'); // 默认显示观看历史页
+// 模拟已登录用户的 ID，在实际项目中，这应从认证状态管理中获取
+const userId = ref(1); 
+
+// 个人信息
+const username = ref('');
+const exp = ref(0);
+const isLoadingProfile = ref(true);
+
+// 加载状态和错误信息
+const isLoading = ref(true);
+const error = ref(null);
 
 // 评论数据
-const comments = ref([
-  { id: 1, date: '2023-11-20', videoTitle: '《赛博朋克：边缘行者》全集解说', videoLink: '#', content: '这个视频解说得太棒了，完全理解了剧情！' },
-  { id: 2, date: '2023-11-18', videoTitle: '【原神】枫丹主线剧情解析', videoLink: '#', content: '期待新版本的更新，感觉枫丹的剧情会很精彩。' },
-  { id: 3, date: '2023-11-15', videoTitle: '英雄联盟 S13 总决赛精彩回顾', videoLink: '#', content: '这场比赛太刺激了，恭喜T1！' },
-]);
-
+const comments = ref([]);
 // 收藏影片数据
-const favoritedMovies = ref([
-  { id: '1', title: '速度与激情10', poster: 'https://picsum.photos/id/1020/120/180', year: '2023', rating: '8.5' },
-  { id: '2', title: '流浪地球2', poster: 'https://picsum.photos/id/1021/120/180', year: '2023', rating: '9.0' },
-  { id: '3', title: '沙丘', poster: 'https://picsum.photos/id/1022/120/180', year: '2021', rating: '8.8' },
-  { id: '4', title: '阿凡达', poster: 'https://picsum.photos/id/1023/120/180', year: '2009', rating: '8.7' },
-  { id: '5', title: '红海行动', poster: 'https://picsum.photos/id/1024/120/180', year: '2018', rating: '8.3' },
-  { id: '6', title: '战狼2', poster: 'https://picsum.photos/id/1025/120/180', year: '2017', rating: '7.5' },
-]);
-
+const favoritedMovies = ref([]);
 // 历史观看数据
-const historyMovies = ref([
-  { id: '5', title: '盗梦空间', poster: 'https://picsum.photos/id/1024/120/180', year: '2010', viewDate: '2023-01-15' },
-  { id: '6', title: '星际穿越', poster: 'https://picsum.photos/id/1025/120/180', year: '2014', viewDate: '2023-01-10' },
-  { id: '7', title: '蝙蝠侠：黑暗骑士', poster: 'https://picsum.photos/id/1026/120/180', year: '2008', viewDate: '2022-12-28' },
-  { id: '8', title: '指环王：护戒使者', poster: 'https://picsum.photos/id/1027/120/180', year: '2001', viewDate: '2022-12-20' },
-]);
+const historyMovies = ref([]);
 
+// 默认显示观看历史页
+const activeTab = ref('history');
 
 // 顶部导航栏 Tabs
 const tabs = ref([
@@ -241,7 +234,99 @@ const handleModuleClick = (module) => {
 const goToEditProfile = () => {
   router.push({ name: 'EditProfile' });
 };
+
+// 后端 API 地址
+const API_BASE_URL = 'http://localhost:8080/api';
+
+/**
+ * 异步获取用户个人信息
+ */
+const fetchUserProfile = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/users/${userId.value}`);
+    const userData = response.data;
+    username.value = userData.username;
+    exp.value = userData.exp; // 假设后端返回exp字段
+  } catch (err) {
+    console.error('获取个人信息失败:', err);
+    error.value = '无法获取个人信息，请稍后再试。';
+  } finally {
+    isLoadingProfile.value = false;
+  }
+};
+
+/**
+ * 异步获取用户评论数据
+ */
+const fetchComments = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/users/${userId.value}/comments`);
+    // 假设后端返回的数据格式与前端所需一致
+    comments.value = response.data.map(comment => ({
+      id: comment.socialId, // 使用后端返回的唯一ID
+      date: new Date(comment.createdAt).toLocaleDateString(),
+      videoTitle: comment.movieTitle, // 假设后端返回电影标题
+      videoLink: `/movie/${comment.movieId}`, // 假设后端返回电影ID
+      content: comment.comment,
+    }));
+  } catch (err) {
+    console.error('获取评论数据失败:', err);
+    error.value = '无法获取评论数据，请稍后再试。';
+  }
+};
+
+/**
+ * 异步获取用户收藏影片数据
+ */
+const fetchFavorites = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/users/${userId.value}/favorites`);
+    // 假设后端返回的数据格式与前端所需一致
+    favoritedMovies.value = response.data.map(fav => ({
+      id: fav.movieId,
+      title: fav.title,
+      poster: fav.posterUrl,
+      year: new Date(fav.releaseDate).getFullYear(),
+      rating: fav.avgRating, // 使用电影的平均评分
+    }));
+  } catch (err) {
+    console.error('获取收藏数据失败:', err);
+    error.value = '无法获取收藏数据，请稍后再试。';
+  }
+};
+
+/**
+ * 异步获取用户观看历史数据
+ */
+const fetchHistory = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/users/${userId.value}/history`);
+    // 假设后端返回的数据格式与前端所需一致
+    historyMovies.value = response.data.map(history => ({
+      id: history.movieId,
+      title: history.title,
+      poster: history.posterUrl,
+      year: new Date(history.releaseDate).getFullYear(),
+      viewDate: new Date(history.viewDate).toLocaleDateString(),
+    }));
+  } catch (err) {
+    console.error('获取观看历史数据失败:', err);
+    error.value = '无法获取观看历史数据，请稍后再试。';
+  }
+};
+
+// 在组件挂载时，并行加载所有数据
+onMounted(async () => {
+  await Promise.all([
+    fetchUserProfile(),
+    fetchComments(),
+    fetchFavorites(),
+    fetchHistory()
+  ]);
+  isLoading.value = false;
+});
 </script>
+
 
 <style scoped>
 /* Main container */

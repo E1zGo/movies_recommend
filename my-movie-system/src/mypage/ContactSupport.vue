@@ -44,47 +44,72 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import axios from 'axios';
 
 const router = useRouter();
 
-const faqs = ref([
-  { 
-    question: '如何修改我的个人资料？', 
-    answer: '你可以在个人主页点击右上角的编辑按钮，进入个人资料编辑页面进行修改。',
-    showAnswer: false
-  },
-  { 
-    question: '为什么我的视频播放卡顿？', 
-    answer: '视频卡顿可能由网络状况不佳、设备性能不足或视频源问题引起。建议你检查网络连接、清除缓存或切换视频清晰度。',
-    showAnswer: false
-  },
-  { 
-    question: '我的收藏和历史记录不见了怎么办？', 
-    answer: '请确保你已登录账号，并检查网络连接。如果问题依然存在，请联系客服提供你的账号信息，我们会协助你找回记录。',
-    showAnswer: false
-  },
-  { 
-    question: '如何注销我的账号？', 
-    answer: '账号注销是不可逆的操作。如需注销，请进入“设置”->“安全与隐私”，根据指引提交注销申请。',
-    showAnswer: false
-  },
-]);
+const isLoading = ref(true);
+const error = ref(null);
 
+// FAQ 数据将从后端动态获取
+const faqs = ref([]);
+
+const API_BASE_URL = 'http://localhost:8080/api';
+
+/**
+ * 异步获取常见问题数据
+ */
+const fetchFaqs = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/support/faqs`);
+    // 假设后端返回的数据格式与前端所需一致
+    faqs.value = response.data.map(item => ({ ...item, showAnswer: false }));
+  } catch (err) {
+    console.error('获取 FAQ 数据失败:', err);
+    error.value = '无法加载常见问题，请稍后再试。';
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+/**
+ * 切换答案的显示/隐藏状态
+ */
 const toggleAnswer = (index) => {
   faqs.value[index].showAnswer = !faqs.value[index].showAnswer;
 };
 
-const requestHumanService = () => {
-  alert('你的申请已提交，客服人员将在24小时内与你联系。');
-  console.log('申请人工服务');
+/**
+ * 提交人工服务请求到后端
+ */
+const requestHumanService = async () => {
+  try {
+    // 假设后端需要一个用户ID来记录请求
+    const userId = 1; // 实际项目中从认证状态获取
+    await axios.post(`${API_BASE_URL}/support/request`, { userId });
+    console.log('你的申请已提交，客服人员将在24小时内与你联系。');
+    // TODO: 替换为更友好的UI提示，例如一个toast或弹窗
+  } catch (err) {
+    console.error('提交人工服务请求失败:', err);
+    error.value = '提交请求失败，请稍后再试。';
+  }
 };
 
+/**
+ * 返回上一页
+ */
 const goBack = () => {
   router.go(-1);
 };
+
+// 在组件挂载时加载数据
+onMounted(() => {
+  fetchFaqs();
+});
 </script>
+
 
 <style scoped>
 /* 整个页面的外层容器 */

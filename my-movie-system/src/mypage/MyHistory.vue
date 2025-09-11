@@ -28,27 +28,62 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import axios from 'axios';
 
 const router = useRouter();
 
-// 模拟历史观看数据，在实际应用中，这里应该从后端获取
-const historyMovies = ref([
-  { id: '5', title: '盗梦空间', poster: 'https://picsum.photos/id/1024/120/180', year: '2010', viewDate: '2023-01-15' },
-  { id: '6', title: '星际穿越', poster: 'https://picsum.photos/id/1025/120/180', year: '2014', viewDate: '2023-01-10' },
-  { id: '7', title: '蝙蝠侠：黑暗骑士', poster: 'https://picsum.photos/id/1026/120/180', year: '2008', viewDate: '2022-12-28' },
-  { id: '8', title: '指环王：护戒使者', poster: 'https://picsum.photos/id/1027/120/180', year: '2001', viewDate: '2022-12-20' },
-]);
+// 模拟已登录用户的 ID，在实际项目中，这应从认证状态管理中获取
+const userId = ref(1);
 
+// 历史观看数据
+const historyMovies = ref([]);
+const isLoading = ref(true);
+const error = ref(null);
+
+const API_BASE_URL = 'http://localhost:8080/api';
+
+/**
+ * 异步获取用户观看历史数据
+ */
+const fetchHistory = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/users/${userId.value}/history`);
+    // 假设后端返回的数据格式与前端所需一致
+    historyMovies.value = response.data.map(history => ({
+      id: history.movieId,
+      title: history.title,
+      poster: history.posterUrl,
+      year: new Date(history.releaseDate).getFullYear(),
+      viewDate: new Date(history.viewDate).toLocaleDateString(),
+    }));
+  } catch (err) {
+    console.error('获取观看历史数据失败:', err);
+    error.value = '无法获取观看历史数据，请稍后再试。';
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+/**
+ * 导航到电影详情页
+ */
 const goToMovieDetail = (movieId) => {
-  // 使用路由的命名跳转，并传入动态参数
   router.push({ name: 'MovieDetailPage', params: { id: movieId } });
 };
 
+/**
+ * 返回上一页
+ */
 const goBack = () => {
   router.go(-1);
 };
+
+// 在组件挂载时加载数据
+onMounted(() => {
+  fetchHistory();
+});
 </script>
 
 <style scoped>

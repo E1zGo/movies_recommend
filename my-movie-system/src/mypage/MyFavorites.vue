@@ -30,28 +30,64 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import axios from 'axios';
 
 const router = useRouter();
 
-// 模拟收藏影片数据，在实际应用中，这里应该从后端获取
-const favoritedMovies = ref([
-  { id: '1', title: '速度与激情10', poster: 'https://picsum.photos/id/1020/120/180', year: '2023', rating: '8.5' },
-  { id: '2', title: '流浪地球2', poster: 'https://picsum.photos/id/1021/120/180', year: '2023', rating: '9.0' },
-  { id: '3', title: '沙丘', poster: 'https://picsum.photos/id/1022/120/180', year: '2021', rating: '8.8' },
-  { id: '4', title: '阿凡达', poster: 'https://picsum.photos/id/1023/120/180', year: '2009', rating: '8.7' },
-]);
+// 模拟已登录用户的 ID，在实际项目中，这应从认证状态管理中获取
+const userId = ref(1);
 
+// 收藏影片数据
+const favoritedMovies = ref([]);
+const isLoading = ref(true);
+const error = ref(null);
+
+const API_BASE_URL = 'http://localhost:8080/api';
+
+/**
+ * 异步获取用户收藏影片数据
+ */
+const fetchFavorites = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/users/${userId.value}/favorites`);
+    // 假设后端返回的数据格式与前端所需一致
+    favoritedMovies.value = response.data.map(favorite => ({
+      id: favorite.movieId,
+      title: favorite.title,
+      poster: favorite.posterUrl,
+      year: new Date(favorite.releaseDate).getFullYear(),
+      rating: favorite.avgRating,
+    }));
+  } catch (err) {
+    console.error('获取收藏数据失败:', err);
+    error.value = '无法获取收藏数据，请稍后再试。';
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+/**
+ * 导航到电影详情页
+ */
 const goToMovieDetail = (movieId) => {
-  // 使用路由的命名跳转，并传入动态参数
   router.push({ name: 'MovieDetail', params: { id: movieId } });
 };
 
+/**
+ * 返回上一页
+ */
 const goBack = () => {
   router.go(-1);
 };
+
+// 在组件挂载时加载数据
+onMounted(() => {
+  fetchFavorites();
+});
 </script>
+
 
 <style scoped>
 /* 整个页面的外层容器 */

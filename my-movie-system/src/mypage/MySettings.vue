@@ -37,73 +37,117 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import axios from 'axios';
 
 const router = useRouter();
 
-const isImmortalModeEnabled = ref(false); // 控制修仙模式开关状态
+// 模拟已登录用户的 ID，在实际项目中应从认证状态管理中获取
+const userId = ref(1); 
 
+const isImmortalModeEnabled = ref(false); // 控制修仙模式开关状态
+const isLoading = ref(true); // 加载状态
+const error = ref(null); // 错误信息
+
+// 其他功能模块列表
 const settingsOptions = ref([
-  { name: '安全隐私' },
-  { name: '语言' },
+  { name: '安全隐私', route: 'SecurityAndPrivacy' },
+  { name: '语言', route: 'LanguageSettings' },
   { name: '修仙模式' }, // 修仙模式会单独处理
   { name: '清理缓存' },
-  { name: '用户协议' },
-  { name: '隐私政策' },
-  { name: '关于众神TV' },
+  { name: '用户协议', route: 'UserAgreement' },
+  { name: '隐私政策', route: 'PrivacyPolicy' },
+  { name: '关于众神TV', route: 'About' },
   { name: '账号切换' },
 ]);
 
-const handleSettingClick = (itemName) => {
-  switch (itemName) {
+// 后端 API 地址
+const API_BASE_URL = 'http://localhost:8080/api';
+
+/**
+ * 异步加载用户设置
+ */
+const fetchUserSettings = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/users/${userId.value}/settings`);
+    isImmortalModeEnabled.value = response.data.isImmortalModeEnabled; // 假设后端返回该字段
+  } catch (err) {
+    console.error('获取用户设置失败:', err);
+    error.value = '无法加载设置，请稍后再试。';
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+/**
+ * 异步保存修仙模式状态到后端
+ */
+const saveImmortalModeSetting = async (isEnabled) => {
+  try {
+    await axios.post(`${API_BASE_URL}/users/${userId.value}/settings/immortal-mode`, { isEnabled });
+    console.log('修仙模式状态已成功保存到后端');
+  } catch (err) {
+    console.error('保存修仙模式设置失败:', err);
+    error.value = '修仙模式状态保存失败。';
+  }
+};
+
+/**
+ * 监听修仙模式开关状态变化，并自动保存到后端
+ */
+watch(isImmortalModeEnabled, (newValue) => {
+  saveImmortalModeSetting(newValue);
+});
+
+/**
+ * 处理设置点击事件
+ */
+const handleSettingClick = async (item) => {
+  switch (item.name) {
     case '安全隐私':
-      console.log('导航到安全隐私页面');
-      // router.push({ name: 'SecurityAndPrivacy' });
-      break;
     case '语言':
-      console.log('导航到语言设置页面');
-      // router.push({ name: 'LanguageSettings' });
-      break;
-    case '修仙模式':
-      // 修仙模式的开关由 v-model 控制，点击列表项本身不会触发操作
-      break;
-    case '清理缓存':
-      alert('正在清理缓存...');
-      console.log('缓存已清理');
-      break;
     case '用户协议':
-      console.log('导航到用户协议页面');
-      // router.push({ name: 'UserAgreement' });
-      break;
     case '隐私政策':
-      console.log('导航到隐私政策页面');
-      // router.push({ name: 'PrivacyPolicy' });
-      break;
     case '关于众神TV':
-      console.log('导航到关于页面');
-      // router.push({ name: 'About' });
-      break;
-    case '账号切换':
-      alert('正在切换账号...');
-      console.log('切换账号功能');
-      // router.push({ name: 'Login' });
-      break;
-    case '退出当前账号':
-      if (confirm('确定要退出登录吗？')) {
-        console.log('退出登录功能');
-        // router.push({ name: 'Login' });
+      if (item.route) {
+        router.push({ name: item.route });
       }
       break;
+    case '清理缓存':
+      // TODO: 替换为 UI 模态框或消息提示
+      console.log('正在调用后端 API 清理缓存...');
+      try {
+        await axios.post(`${API_BASE_URL}/users/${userId.value}/cache/clear`);
+        console.log('后端缓存已清理');
+        // TODO: 在前端显示清理成功的提示
+      } catch (err) {
+        console.error('清理缓存失败:', err);
+        // TODO: 在前端显示错误提示
+      }
+      break;
+    case '账号切换':
+      // TODO: 替换为 UI 模态框
+      console.log('正在调用后端 API 切换账号...');
+      // 模拟后端登录状态重置
+      // router.push({ name: 'Login' });
+      break;
     default:
-      console.log(`点击了未知的选项: ${itemName}`);
+      console.log(`点击了未知的选项: ${item.name}`);
   }
 };
 
 const goBack = () => {
   router.go(-1);
 };
+
+onMounted(() => {
+  fetchUserSettings();
+});
 </script>
+
+
+
 
 <style scoped>
 .page-wrapper {

@@ -55,72 +55,82 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import axios from 'axios';
 
 const router = useRouter();
+
 const goBack = () => {
   router.back();
 };
 
+const userId = ref(1); // 模拟已登录用户的ID，实际项目中应从认证状态中获取
+const isLoading = ref(true);
+const error = ref(null);
+
+// 后端 API 地址
+const API_BASE_URL = 'http://localhost:8080/api';
+
 const tabs = ref([
-  { 
-    id: 'like', 
-    label: '点赞', 
-    unreadCount: 3, 
-    messages: [
-      { id: 1, text: '张三赞了你的评论', time: '1分钟前' },
-      { id: 2, text: '李四赞了你的帖子', time: '1小时前' },
-      { id: 3, text: '王五赞了你的照片', time: '昨天' }
-    ] 
-  },
-  { 
-    id: 'reply', 
-    label: '回复', 
-    unreadCount: 1, 
-    messages: [
-      { id: 4, text: '张三回复了你的评论: "说得对！"', time: '3分钟前' }
-    ] 
-  },
-  { 
-    id: 'at_me', 
-    label: '@我', 
-    unreadCount: 2, 
-    messages: [
-      { id: 5, text: '李四在帖子中@了你', time: '2小时前' },
-      { id: 6, text: '王五在评论中@了你', time: '昨天' }
-    ] 
-  },
-  { 
-    id: 'system', 
-    label: '系统消息', 
-    unreadCount: 5, 
-    messages: [
-      { id: 7, text: '新版本上线，更多功能等你来体验！', time: '刚刚' },
-      { id: 8, text: '系统维护通知：请提前保存您的草稿', time: '昨天' }
-    ] 
-  }
+  { id: 'like', label: '点赞', unreadCount: 0, messages: [] },
+  { id: 'reply', label: '回复', unreadCount: 0, messages: [] },
+  { id: 'at_me', label: '@我', unreadCount: 0, messages: [] },
+  { id: 'system', label: '系统消息', unreadCount: 0, messages: [] }
 ]);
 
 const activeTab = ref(null);
+const privateMessages = ref([]);
 
-const toggleTab = (tabId) => {
+/**
+ * 异步加载所有消息数据
+ */
+const fetchMessages = async () => {
+  isLoading.value = true;
+  error.value = null;
+  try {
+    // 获取通知总未读数
+    const unreadRes = await axios.get(`${API_BASE_URL}/notifications/unread-count`, { params: { userId: userId.value } });
+    const unreadCounts = unreadRes.data.data;
+    tabs.value.forEach(tab => {
+      tab.unreadCount = unreadCounts[tab.id] || 0;
+    });
+
+    // 获取所有通知消息
+    for (const tab of tabs.value) {
+      const res = await axios.get(`${API_BASE_URL}/notifications`, { params: { userId: userId.value, type: tab.id } });
+      tab.messages = res.data.data || [];
+    }
+
+    // 获取私信列表
+    const privateRes = await axios.get(`${API_BASE_URL}/messages`, { params: { userId: userId.value } });
+    privateMessages.value = privateRes.data.data || [];
+
+  } catch (err) {
+    console.error('加载消息失败:', err);
+    error.value = '无法加载消息，请稍后再试。';
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const toggleTab = async (tabId) => {
   if (activeTab.value === tabId) {
     activeTab.value = null; // 再次点击时收起
   } else {
     activeTab.value = tabId;
     const tab = tabs.value.find(t => t.id === tabId);
-    if (tab) {
+    if (tab && tab.unreadCount > 0) {
+      // 标记为已读
+      await axios.post(`${API_BASE_URL}/notifications/read-by-type`, { userId: userId.value, type: tabId });
       tab.unreadCount = 0; // 清除未读数量
     }
   }
 };
 
-const privateMessages = ref([
-  { id: 10, sender: '小明', avatar: 'https://picsum.photos/id/1005/50/50', text: '你好，很高兴认识你！', time: '1分钟前' },
-  { id: 11, sender: '小红', avatar: 'https://picsum.photos/id/1006/50/50', text: '你的文章写得太棒了！', time: '1小时前' },
-  { id: 12, sender: '小华', avatar: 'https://picsum.photos/id/1009/50/50', text: '在吗？有个问题想请教一下。', time: '昨天' }
-]);
+onMounted(() => {
+  fetchMessages();
+});
 </script>
 
 <style scoped>

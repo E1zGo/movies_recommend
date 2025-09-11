@@ -9,89 +9,105 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import * as echarts from 'echarts';
 import 'echarts-wordcloud';
+import axios from 'axios';
 
 const chartRef = ref(null);
 let myChart = null; // 声明一个变量来存储图表实例
+const wordCloudData = ref([]); // 动态数据源
+const isLoading = ref(true); // 加载状态
+const error = ref(null); // 错误信息
 
-const wordCloudData = ref([
-  { name: '科幻', value: 100 },
-  { name: '动作', value: 85 },
-  { name: '喜剧', value: 70 },
-  { name: '悬疑', value: 60 },
-  { name: '冒险', value: 55 },
-  { name: '爱情', value: 45 },
-  { name: '动画', value: 40 },
-  { name: '剧情', value: 35 },
-  { name: '犯罪', value: 30 },
-  { name: '历史', value: 25 },
-  { name: '魔幻', value: 20 },
-  { name: '奇幻', value: 18 },
-  { name: '文艺', value: 15 },
-  { name: '经典', value: 12 },
-  { name: '青春', value: 10 },
-  { name: '战争', value: 8 },
-]);
+const API_BASE_URL = 'http://localhost:8080/api';
 
-onMounted(() => {
-  if (chartRef.value) {
-    myChart = echarts.init(chartRef.value);
-    const option = {
-      series: [
-        {
-          type: 'wordCloud',
-          shape: 'circle',
-          sizeRange: [12, 40], // 缩小词语大小范围，让整体更紧凑
-          rotationRange: [0, 0], // **关键修改：将旋转角度范围设为0，保持水平**
-          gridSize: 10,
-          layoutAnimation: true, // 开启布局动画
-          textStyle: {
-            fontFamily: 'sans-serif',
-            fontWeight: 'bold',
-            color: '#fff', // **关键修改：固定颜色为白色，而非随机色**
-          },
-          // 优化：使用不同的颜色，但不是随机的，而是从一个调色板中选择
-          emphasis: {
-            focus: 'self',
-            textStyle: {
-              shadowBlur: 10,
-              shadowColor: '#fff',
-            },
-          },
-          data: wordCloudData.value,
-        },
-      ],
-    };
+/**
+ * 异步加载词云数据
+ */
+const fetchWordCloudData = async () => {
+    isLoading.value = true;
+    error.value = null;
+    try {
+        const response = await axios.get(`${API_BASE_URL}/trends/word-cloud`);
+        wordCloudData.value = response.data.data || [];
+        // 在数据加载成功后，渲染图表
+        renderChart();
+    } catch (err) {
+        console.error('加载词云数据失败:', err);
+        error.value = '无法加载词云，请稍后再试。';
+    } finally {
+        isLoading.value = false;
+    }
+};
 
+/**
+ * 渲染 ECharts 词云图
+ */
+const renderChart = () => {
+    if (!chartRef.value || !wordCloudData.value.length) {
+        return;
+    }
+
+    if (!myChart) {
+        myChart = echarts.init(chartRef.value);
+    }
+    
     // 为不同热度的词语设置不同颜色
     const colors = ['#e50914', '#f58220', '#66c04f', '#4285f4'];
     const dataWithColors = wordCloudData.value.map(item => {
-      let color = colors[3]; // 默认颜色
-      if (item.value >= 70) {
-        color = colors[0]; // 热度高用电影红
-      } else if (item.value >= 50) {
-        color = colors[1];
-      } else if (item.value >= 30) {
-        color = colors[2];
-      }
-      return {
-        ...item,
-        textStyle: {
-          color: color,
-        },
-      };
+        let color = colors[3]; // 默认颜色
+        if (item.value >= 70) {
+            color = colors[0]; // 热度高用电影红
+        } else if (item.value >= 50) {
+            color = colors[1];
+        } else if (item.value >= 30) {
+            color = colors[2];
+        }
+        return {
+            ...item,
+            textStyle: {
+                color: color,
+            },
+        };
     });
-    option.series[0].data = dataWithColors;
+
+    const option = {
+        series: [
+            {
+                type: 'wordCloud',
+                shape: 'circle',
+                sizeRange: [12, 40],
+                rotationRange: [0, 0],
+                gridSize: 10,
+                layoutAnimation: true,
+                textStyle: {
+                    fontFamily: 'sans-serif',
+                    fontWeight: 'bold',
+                },
+                emphasis: {
+                    focus: 'self',
+                    textStyle: {
+                        shadowBlur: 10,
+                        shadowColor: '#fff',
+                    },
+                },
+                data: dataWithColors, // 使用带有颜色的动态数据
+            },
+        ],
+    };
 
     myChart.setOption(option);
     window.addEventListener('resize', () => myChart.resize());
-  }
+};
+
+onMounted(() => {
+    fetchWordCloudData();
 });
 
-// 在组件卸载时销毁图表实例，防止内存泄漏
 onUnmounted(() => {
-  if (myChart) {
-    myChart.dispose();
-  }
+    if (myChart) {
+        myChart.dispose();
+        myChart = null;
+    }
+    window.removeEventListener('resize', () => myChart.resize());
 });
 </script>
 

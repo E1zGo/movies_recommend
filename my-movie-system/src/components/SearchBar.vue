@@ -82,7 +82,15 @@
 </template>
 
 <script setup>
-import { ref, onUnmounted } from 'vue';
+
+import { ref, onMounted, onUnmounted } from 'vue';
+import { useRouter } from 'vue-router';
+import axios from 'axios';
+
+const router = useRouter();
+
+// 模拟已登录用户的 ID，在实际项目中应从认证状态管理中获取
+const userId = ref(1);
 
 const searchQuery = ref('');
 const isDropdownVisible = ref(false);
@@ -91,11 +99,39 @@ const errorMessage = ref('');
 const dropdownStyle = ref({});
 const searchBarRef = ref(null);
 
-const history = ref(['复仇者联盟', '蜘蛛侠：英雄远征']);
-const hotList = ref(['流浪地球2', '长津湖', '你好，李焕英', '战狼2', '哪吒之魔童降世', '速度与激情10', '消失的她', '封神第一部']);
-const discover = ref(['科幻', '悬疑', '动作', '喜剧', '爱情', '冒险']);
+// 动态数据
+const history = ref([]);
+const hotList = ref([]);
+const discover = ref([]);
 
-// 新增：更新下拉菜单位置的函数
+// 后端 API 地址
+const API_BASE_URL = 'http://localhost:8080/api';
+
+/**
+ * 异步加载搜索下拉菜单所需的所有数据
+ */
+const loadSearchData = async () => {
+  try {
+    // 获取搜索历史
+    const historyRes = await axios.get(`${API_BASE_URL}/users/${userId.value}/search-history`);
+    history.value = historyRes.data.data || [];
+
+    // 获取热门搜索
+    const hotListRes = await axios.get(`${API_BASE_URL}/search/hot-words`);
+    hotList.value = hotListRes.data.data || [];
+
+    // 获取探索分类
+    const discoverRes = await axios.get(`${API_BASE_URL}/genres`);
+    discover.value = discoverRes.data.data || [];
+
+  } catch (err) {
+    console.error('加载搜索数据失败:', err);
+  }
+};
+
+/**
+ * 更新下拉菜单位置的函数
+ */
 const updateDropdownPosition = () => {
   if (searchBarRef.value) {
     const rect = searchBarRef.value.getBoundingClientRect();
@@ -109,7 +145,7 @@ const updateDropdownPosition = () => {
 
 let blurTimeout = null;
 
-const handleSearch = () => {
+const handleSearch = async () => {
   if (searchQuery.value.trim() === '') {
     errorMessage.value = '请输入电影名称。';
     return;
@@ -117,10 +153,16 @@ const handleSearch = () => {
   
   errorMessage.value = '';
   
-  if (!history.value.includes(searchQuery.value)) {
-    history.value.unshift(searchQuery.value);
+  // 异步保存搜索历史
+  try {
+    await axios.post(`${API_BASE_URL}/users/${userId.value}/search-history`, {
+      query: searchQuery.value
+    });
+  } catch (err) {
+    console.error('保存搜索历史失败:', err);
   }
-  
+
+  // TODO: 跳转到搜索结果页，将 searchQuery 作为参数传递
   console.log('搜索内容:', searchQuery.value);
   isDropdownVisible.value = false;
 };
@@ -130,8 +172,13 @@ const selectSearch = (item) => {
   handleSearch();
 };
 
-const clearHistory = () => {
-  history.value = [];
+const clearHistory = async () => {
+  try {
+    await axios.delete(`${API_BASE_URL}/users/${userId.value}/search-history`);
+    history.value = [];
+  } catch (err) {
+    console.error('清除搜索历史失败:', err);
+  }
 };
 
 const handleBlur = () => {
@@ -150,7 +197,10 @@ const handleFocus = () => {
   window.addEventListener('scroll', updateDropdownPosition);
 };
 
-// 确保在组件销毁时移除事件监听器，避免内存泄漏
+onMounted(() => {
+  loadSearchData();
+});
+
 onUnmounted(() => {
   window.removeEventListener('scroll', updateDropdownPosition);
 });

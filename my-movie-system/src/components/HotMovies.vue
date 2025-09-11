@@ -23,41 +23,47 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import axios from 'axios';
 
 const router = useRouter();
 const carousel = ref(null);
+const hotMovies = ref([]); // 动态数据
 
-const hotMovies = ref([
-  { id: 21, name: '速度与激情10', rating: 9.0, poster: 'https://cdn.pixabay.com/photo/2023/07/28/18/59/ai-generated-8155998_1280.png' },
-  { id: 22, name: '消失的她', rating: 8.8, poster: 'https://cdn.pixabay.com/photo/2023/07/25/11/56/ai-generated-8149176_1280.png' },
-  { id: 23, name: '流浪地球2', rating: 9.3, poster: 'https://cdn.pixabay.com/photo/2023/09/21/04/45/ai-generated-8265779_1280.png' },
-  { id: 24, name: '封神第一部', rating: 9.1, poster: 'https://cdn.pixabay.com/photo/2023/08/29/14/05/ai-generated-8221191_1280.png' },
-  { id: 25, name: '孤注一掷', rating: 8.9, poster: 'https://cdn.pixabay.com/photo/2023/10/25/11/49/ai-generated-8340150_1280.png' },
-  { id: 26, name: '八角笼中', rating: 8.7, poster: 'https://cdn.pixabay.com/photo/2023/10/22/07/35/ai-generated-8333333_1280.png' },
-  { id: 27, name: '长安三万里', rating: 9.2, poster: 'https://cdn.pixabay.com/photo/2023/10/20/15/34/ai-generated-8330107_1280.png' },
-  { id: 28, name: 'GT赛车：极速狂飙', rating: 8.5, poster: 'https://cdn.pixabay.com/photo/2023/10/19/08/42/ai-generated-8326265_1280.png' },
-  { id: 29, name: '奥本海默', rating: 9.1, poster: 'https://cdn.pixabay.com/photo/2023/11/03/05/59/ai-generated-8361661_1280.jpg' },
-  { id: 30, name: '芭比', rating: 7.9, poster: 'https://cdn.pixabay.com/photo/2016/11/29/03/40/movie-1867140_1280.jpg' },
-]);
-
+// 滚动
 const scroll = (direction) => {
   const container = carousel.value;
   if (!container) return;
-  
+
   const scrollAmount = 320;
-  if (direction === 'next') {
-    container.scrollLeft += scrollAmount;
-  } else {
-    container.scrollLeft -= scrollAmount;
-  }
+  container.scrollLeft += direction === 'next' ? scrollAmount : -scrollAmount;
 };
 
+// 跳转电影详情
 const goToMovie = (movieId) => {
   router.push({ name: 'MovieDetailPage', params: { id: movieId } });
 };
+
+// 加载热门电影
+const loadHotMovies = async () => {
+  try {
+    const res = await axios.get('/api/movies/hot', {
+      params: {
+        limit: 10 // 可选，控制前端要多少条数据
+      }
+    });
+    hotMovies.value = res.data.data || [];
+  } catch (err) {
+    console.error('加载热门电影失败:', err);
+  }
+};
+
+onMounted(() => {
+  loadHotMovies();
+});
 </script>
+
 
 <style scoped>
 .hot-movies-container {
